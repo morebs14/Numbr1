@@ -1,0 +1,364 @@
+
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>نظام الأقساط المتقدم</title>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #0a0a0a;
+            color: #00ff00;
+            margin: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            border: 1px solid #00ff00;
+            padding: 25px;
+            box-shadow: 0 0 20px #00ff0080;
+            border-radius: 5px;
+        }
+
+        h1 {
+            text-shadow: 0 0 15px #00ff00;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+        }
+
+        input, button {
+            padding: 15px;
+            background: #000000;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+
+        input:focus, button:hover {
+            box-shadow: 0 0 15px #00ff00;
+            transform: scale(1.02);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 25px;
+            border: 3px solid #00ff00;
+            font-size: 18px;
+        }
+
+        th, td {
+            border: 1px solid #00ff00;
+            padding: 20px;
+            text-align: center;
+            background-color: #001a00;
+        }
+
+        th {
+            background-color: #003300;
+            font-size: 20px;
+        }
+
+        .actions button {
+            margin: 0 5px;
+            padding: 8px 12px;
+            font-size: 16px;
+            min-width: 40px;
+        }
+
+        #exportBtn {
+            background: #006600;
+            margin: 25px 0;
+            float: left;
+            font-size: 18px;
+        }
+
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #002200;
+            padding: 15px;
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            display: none;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 نظام إدارة الأقساط المتقدم 🔥</h1>
+        
+        <div class="form-group">
+            <input type="text" id="name" placeholder="الاسم" required>
+            <input type="number" id="amount" placeholder="المبلغ" required>
+            <input type="number" id="customerId" placeholder="رقم العميل" required>
+            <input type="date" id="reminderDate" placeholder="تاريخ التذكير">
+            <input type="text" id="notes" placeholder="ملاحظات">
+        </div>
+
+        <button onclick="addOrUpdateEntry()">💾 حفظ/تحديث</button>
+        <button id="exportBtn" onclick="exportTable()">📸 تصدير عالي الجودة</button>
+
+        <table id="installmentsTable">
+            <thead>
+                <tr>
+                    <th>الاسم</th>
+                    <th>المبلغ</th>
+                    <th>رقم العميل</th>
+                    <th>ملاحظات</th>
+                    <th>تاريخ التذكير</th>
+                    <th>الإجراءات</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+    <div class="notification" id="notification"></div>
+
+    <script>
+        let entries = JSON.parse(localStorage.getItem('installmentsData')) || [];
+        let currentEditIndex = -1;
+
+        function loadData() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = entries.map((entry, index) => `
+                <tr>
+                    <td>${entry.name}</td>
+                    <td>${Number(entry.amount).toLocaleString()} 💵</td>
+                    <td>${entry.customerId}</td>
+                    <td>${entry.notes || '---'}</td>
+                    <td>${entry.reminderDate ? new Date(entry.reminderDate).toLocaleDateString('ar-EG') : '---'}</td>
+                    <td class="actions">
+                        <button onclick="editEntry(this)" title="تعديل" style="color: #00ff00">✏️</button>
+                        <button onclick="deleteEntry(this)" title="حذف" style="color: #ff0000">🗑️</button>
+                        <button onclick="addToContacts('${entry.name}', '${entry.customerId}')" 
+                                title="إضافة إلى جهات الاتصال" style="color: #00ffff">📞</button>
+                        ${entry.reminderDate ? 
+                            `<button onclick="addToCalendar(${index})" title="إضافة إلى التقويم" style="color: #ffd700">📅</button>` 
+                            : ''
+                        }
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function saveData() {
+            localStorage.setItem('installmentsData', JSON.stringify(entries));
+        }
+
+        function addOrUpdateEntry() {
+            const name = document.getElementById('name').value.trim();
+            const amount = document.getElementById('amount').value.trim();
+            const customerId = document.getElementById('customerId').value.trim();
+            
+            if (!name || !amount || !customerId) {
+                showNotification('⛔ الرجاء ملء الحقول المطلوبة', '#ff0000');
+                return;
+            }
+
+            const entry = {
+                name,
+                amount,
+                customerId,
+                notes: document.getElementById('notes').value.trim(),
+                reminderDate: document.getElementById('reminderDate').value
+            };
+
+            if (currentEditIndex === -1) {
+                entries.push(entry);
+                showNotification('✅ تمت الإضافة بنجاح', '#00ff00');
+            } else {
+                entries[currentEditIndex] = entry;
+                currentEditIndex = -1;
+                showNotification('🔄 تم التحديث بنجاح', '#00ff00');
+            }
+
+            saveData();
+            loadData();
+            document.querySelectorAll('input').forEach(input => input.value = '');
+        }
+
+        function editEntry(button) {
+            const rowIndex = Array.from(button.closest('tr').parentNode.children).indexOf(button.closest('tr'));
+            const entry = entries[rowIndex];
+            
+            document.getElementById('name').value = entry.name;
+            document.getElementById('amount').value = entry.amount;
+            document.getElementById('customerId').value = entry.customerId;
+            document.getElementById('notes').value = entry.notes;
+            document.getElementById('reminderDate').value = entry.reminderDate;
+
+            currentEditIndex = rowIndex;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function deleteEntry(button) {
+            if (confirm('⚠️ هل أنت متأكد من الحذف؟')) {
+                const rowIndex = Array.from(button.closest('tr').parentNode.children).indexOf(button.closest('tr'));
+                entries.splice(rowIndex, 1);
+                saveData();
+                loadData();
+                showNotification('🗑️ تم الحذف بنجاح', '#ff0000');
+            }
+        }
+
+        function addToContacts(name, customerId) {
+            if (!customerId) {
+                showNotification('❌ رقم العميل غير صحيح', '#ff0000');
+                return;
+            }
+
+            const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:${name}
+TEL;TYPE=CELL:${customerId}
+END:VCARD`;
+
+            const blob = new Blob([vcard], { type: 'text/vcard' });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${name}_${customerId}.vcf`;
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            showNotification('📱 تم تنزيل ملف الاتصال', '#00ffff');
+        }
+
+        function addToCalendar(index) {
+            const entry = entries[index];
+            if (!entry.reminderDate) return;
+
+            const startDate = new Date(entry.reminderDate + 'T09:00:00Z');
+            const endDate = new Date(startDate.getTime() + 1800000); // +30 دقيقة
+            
+            const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:${Date.now()}@installments-system
+DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z
+DTSTART:${formatDateForICS(startDate)}
+DTEND:${formatDateForICS(endDate)}
+SUMMARY:تذكير بموعد العميل ${entry.name}
+DESCRIPTION:رقم العميل: ${entry.customerId}\\nالمبلغ: ${entry.amount}\\nالملاحظات: ${entry.notes || 'لا توجد ملاحظات'}
+LOCATION:نظام إدارة الأقساط
+STATUS:CONFIRMED
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR`;
+
+            const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+            const url = window.URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `موعد_${entry.name}.ics`;
+            link.click();
+            
+            window.URL.revokeObjectURL(url);
+            showNotification('📅 تم تصدير الموعد إلى التقويم', '#ffd700');
+        }
+
+        function formatDateForICS(date) {
+            return date.toISOString()
+                .replace(/[-:]/g, '')
+                .replace(/\.\d+/g, '')
+                .replace('T', '') + 'Z';
+        }
+
+        async function exportTable() {
+            try {
+                const originalTable = document.getElementById('installmentsTable');
+                const clone = originalTable.cloneNode(true);
+                
+                clone.style.position = 'fixed';
+                clone.style.left = '-10000px';
+                clone.style.width = originalTable.offsetWidth + 'px';
+                clone.style.zoom = '1.5';
+                clone.style.fontFamily = 'Arial, sans-serif';
+                clone.style.backgroundColor = '#0a0a0a';
+                
+                clone.querySelectorAll('td, th').forEach(cell => {
+                    cell.style.fontFamily = 'Arial, sans-serif';
+                    cell.style.letterSpacing = 'normal';
+                    cell.style.padding = '25px';
+                    cell.style.fontSize = '22px';
+                });
+
+                clone.querySelectorAll('td:nth-child(1), td:nth-child(3), td:nth-child(4)').forEach(cell => {
+                    cell.style.direction = 'rtl';
+                    cell.style.textAlign = 'right';
+                    cell.style.unicodeBidi = 'plaintext';
+                    cell.style.fontSize = '24px';
+                });
+
+                document.body.appendChild(clone);
+
+                const canvas = await html2canvas(clone, {
+                    scale: 4,
+                    logging: true,
+                    useCORS: true,
+                    letterRendering: true,
+                    backgroundColor: '#0a0a0a',
+                    foreignObjectRendering: false,
+                    allowTaint: true
+                });
+
+                document.body.removeChild(clone);
+
+                const link = document.createElement('a');
+                link.download = `جدول_الاقساط_${new Date().toISOString().slice(0,10)}.png`;
+                link.href = canvas.toDataURL('image/png', 1.0);
+                link.click();
+                
+                showNotification('📸 تم التصدير بدقة 4K', '#00ff00');
+            } catch (error) {
+                showNotification('❌ فشل التصدير: ' + error.message, '#ff0000');
+            }
+        }
+
+        function showNotification(message, color) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.style.color = color;
+            notification.style.display = 'block';
+            setTimeout(() => notification.style.display = 'none', 3000);
+        }
+
+        function checkReminders() {
+            const today = new Date().toISOString().split('T')[0];
+            entries.forEach(entry => {
+                if (entry.reminderDate === today) {
+                    showNotification(`⏰ تذكير اليوم: ${entry.name} - ${entry.customerId}`, '#00ff00');
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            checkReminders();
+            setInterval(checkReminders, 3600000);
+        });
+    </script>
+</body>
+</html>
